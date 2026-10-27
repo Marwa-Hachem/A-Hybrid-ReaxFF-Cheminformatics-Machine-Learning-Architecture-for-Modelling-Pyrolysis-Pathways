@@ -1,0 +1,75 @@
+from rdkit import Chem, RDLogger
+import pandas as pd
+import os, re
+
+RDLogger.DisableLog('rdApp.*')
+
+input_folder = "./Annealing"
+output_folder_valid = "./Annealing- reaction events validated"
+output_folder_invalid = "./Annealing- reaction events invalid"
+
+os.makedirs(output_folder_valid, exist_ok=True)
+os.makedirs(output_folder_invalid, exist_ok=True)
+
+def is_strictly_valid_smiles(smi: str) -> bool:
+    if not isinstance(smi, str):
+        return False
+    smi = smi.strip()
+    if not smi:
+        return False
+    mol = Chem.MolFromSmiles(smi, sanitize=False)
+    if mol is None:
+        return False
+
+    err = Chem.SanitizeMol(mol, catchErrors=True)
+    if err != Chem.SanitizeFlags.SANITIZE_NONE:
+        return False
+    return True
+
+def check_smiles_list(smiles_str):
+
+    if pd.isna(smiles_str):
+        return ['NA']
+    parts = [s.strip() for s in re.split(r'\s*\+\s*', str(smiles_str))]
+    bads = []
+    for smi in parts:
+        if not smi:
+            continue
+        if not is_strictly_valid_smiles(smi):
+            bads.append(smi)
+    return bads
+
+for file in os.listdir(input_folder):
+    if not file.endswith(".csv"):
+        continue
+
+    in_path = os.path.join(input_folder, file)
+    out_valid = os.path.join(output_folder_valid, file)
+    out_invalid = os.path.join(output_folder_invalid, f"invalid_{file}")
+    df = pd.read_csv(in_path)
+
+    valid_rows, invalid_rows = [], []
+
+    for _, row in df.iterrows():
+        bad_r = check_smiles_list(row.get("Reactants"))
+        bad_p = check_smiles_list(row.get("Products"))
+
+        bad_r = [b for b in bad_r if b]
+        bad_p = [b for b in bad_p if b]
+        all_bad = bad_r + bad_p
+
+        row_dict = row.to_dict()
+        if all_bad:
+            row_dict["Invalid_Reactants"] = ";".join(bad_r)
+            row_dict["Invalid_Products"] = ";".join(bad_p)
+            row_dict["Status"] = "Invalid"
+            invalid_rows.append(row_dict)
+        else:
+            row_dict["Status"] = "Valid"
+            valid_rows.append(row_dict)
+
+    pd.DataFrame(valid_rows).to_csv(out_valid, index=False)
+    pd.DataFrame(invalid_rows).to_csv(out_invalid, index=False)
+
+    print(f" Saved {len(valid_rows)} valid reactions to {out_valid}")
+    print(f" Saved {len(invalid_rows)} invalid reactions to {out_invalid}")
