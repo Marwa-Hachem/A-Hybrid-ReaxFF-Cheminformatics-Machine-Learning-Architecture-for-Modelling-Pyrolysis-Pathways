@@ -1,0 +1,86 @@
+import os
+import pandas as pd
+import glob
+from rdkit import Chem, RDLogger
+RDLogger.DisableLog('rdApp.*')
+
+def canonicalize_smiles(smiles):
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol:
+            return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
+    except:
+        pass
+    return smiles.strip()
+
+def assign_species_ids(smiles_list, indices_list, species_dict, next_id):
+    """assign IDs based on (canonical SMILES + atom index set)"""
+    ids = []
+    for smi, idx_str in zip(smiles_list, indices_list):
+        smi_canon = canonicalize_smiles(smi)
+        atom_idx = tuple(sorted(int(x) for x in idx_str.split() if x.strip().isdigit()))
+        key = (smi_canon, atom_idx)
+
+        if key not in species_dict:
+            species_dict[key] = f"M{next_id[0]}"
+            next_id[0] += 1
+        ids.append(species_dict[key])
+    return ids
+
+
+input_folder = "./Anealing- reaction events validated"
+output_folder = "./Anealing- reaction_events_species_based"
+os.makedirs(output_folder, exist_ok=True)
+
+files = glob.glob(os.path.join(input_folder, "reaction_events_*.csv"))
+
+
+for f in files:
+    df = pd.read_csv(f)
+
+    species_dict = {}   # key=(SMILES, atom_idx_tuple) → M#
+    next_id = [1]
+
+    reactant_ids, product_ids, hybrid_reactions = [], [], []
+
+    for row_idx, row in df.iterrows():
+
+        reactants = [r.strip() for r in str(row["Reactants"]).split("+")]
+        products  = [p.strip() for p in str(row["Products"]).split("+")]
+
+        reactant_idx_list = [r.strip() for r in str(row["Reactants atoms indices"]).split("+")]
+        product_idx_list  = [p.strip() for p in str(row["Products atoms indices"]).split("+")]
+
+        r_ids = assign_species_ids(reactants, reactant_idx_list, species_dict, next_id)
+        p_ids = assign_species_ids(products,  product_idx_list, species_dict, next_id)
+
+        reactant_ids.append(r_ids)
+        product_ids.append(p_ids)
+
+
+        r_hybrid = ".".join([f"{i} ({canonicalize_smiles(s)})" for i, s in zip(r_ids, reactants)])
+        p_hybrid = ".".join([f"{i} ({canonicalize_smiles(s)})" for i, s in zip(p_ids, products)])
+        hybrid_reactions.append(f"{r_hybrid} >> {p_hybrid}")
+
+    df["Reactant_Species_IDs"] = reactant_ids
+    df["Product_Species_IDs"] = product_ids
+    df["Reaction_with_Species_IDs"] = [
+        ".".join(r) + " >> " + ".".join(p) for r, p in zip(reactant_ids, product_ids)
+    ]
+    df["Reaction_HYBRID"] = hybrid_reactions
+
+    base = os.path.basename(f).replace(".csv", "_speciesIDs.csv")
+    df.to_csv(os.path.join(output_folder, base), index=False)
+
+    species_map = pd.DataFrame([
+        {"Molecule_ID": mid, "Canonical_SMILES": smi, "Atom_Indices": list(atom_idx)}
+        for (smi, atom_idx), mid in species_dict.items()
+    ])
+    species_map.to_csv(
+        os.path.join(output_folder, base.replace("_speciesIDs.csv", "_species_map.csv")),
+        index=False
+    )
+
+    print(f" In {base} found {len(species_dict)} unique species.")
+
+print("done")
