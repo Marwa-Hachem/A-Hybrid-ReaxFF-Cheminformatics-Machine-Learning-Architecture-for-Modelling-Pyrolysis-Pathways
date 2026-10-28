@@ -46,7 +46,7 @@ XGBoost 3.1.1
 
 # Data availability
 
-This repository contains the analysis code. The complete ReaxFF trajectories, reaction event logs, and datasets will be deposited on Zenodo upon publication.
+This repository contains the analysis code. The complete ReaxFF trajectories, reaction event logs, and datasets will be shared upon request.
 
 # Citation
 
