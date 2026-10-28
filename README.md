@@ -1,4 +1,4 @@
-# A-Hybrid-ReaxFF-Cheminformatics-Machine-Learning-Architecture-for-Modelling-Pyrolysis-Pathways
+# A-Machine-Learning-Architecture-for-Modelling-Pyrolysis-Pathways
 Hybrid ReaxFF–cheminformatics–machine learning workflow that converts reactive MD event logs into labeled pyrolysis mechanisms, reaction pathways, and Arrhenius parameters. Includes code, labelled datasets, and sample ReaxFF data for cyclohexanone and vegetable glycerin.
 
 Step-by-step protocol: https://www.protocols.io/private/BED06CE0C31411F1AC5C0A58A9FEAC02 
